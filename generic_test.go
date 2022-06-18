@@ -401,11 +401,25 @@ func TestMap(t *testing.T) {
 	type Person struct {
 		Name string
 	}
-	convert, err := Convert[Person](struct {
+	convert, err := Convert[map[string]any](struct {
 		A string
 	}{
 		A: "hello",
 	})
 	assert.Nil(t, err)
 	fmt.Println(convert)
+
+	v2, err := Convert[Person](map[string]any{
+		"Name": "hello",
+	})
+	assert.Nil(t, err)
+	fmt.Println(v2)
+
+	v3, err := Convert[Person](struct {
+		Name string
+	}{
+		Name: "xxx",
+	})
+	assert.Nil(t, err)
+	fmt.Println(v3)
 }

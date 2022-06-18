@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/fatih/structs"
+	"github.com/jinzhu/copier"
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cast"
 )
 
@@ -22,7 +25,9 @@ func Convert[T any](f any) (t T, err error) {
 
 	switch exceptType.Kind() {
 	case reflect.Interface:
-		return any(f), nil
+		var tmpT interface{}
+		tmpT = f
+		return buildT[T](tmpT, exceptType)
 	case reflect.String:
 		var tmpT string
 		tmpT, err = cast.ToStringE(f)
@@ -210,7 +215,64 @@ func Convert[T any](f any) (t T, err error) {
 			return buildT[T](tmpT, exceptType)
 		}
 	case reflect.Map:
-
+		switch any(t).(type) {
+		case map[string]interface{}:
+			tmpT := map[string]any{}
+			tmpT, err = cast.ToStringMapE(f)
+			if err != nil {
+				tmpT = structs.Map(f)
+				return buildT[T](tmpT, exceptType)
+			}
+			return buildT[T](tmpT, exceptType)
+		case map[string]string:
+			tmpT := map[string]string{}
+			tmpT, err = cast.ToStringMapStringE(f)
+			if err != nil {
+				return
+			}
+			return buildT[T](tmpT, exceptType)
+		case map[string]int:
+			tmpT := map[string]int{}
+			tmpT, err = cast.ToStringMapIntE(f)
+			if err != nil {
+				return
+			}
+			return buildT[T](tmpT, exceptType)
+		case map[string]int64:
+			tmpT := map[string]int64{}
+			tmpT, err = cast.ToStringMapInt64E(f)
+			if err != nil {
+				return
+			}
+			return buildT[T](tmpT, exceptType)
+		case map[string]bool:
+			tmpT := make(map[string]bool)
+			tmpT, err = cast.ToStringMapBoolE(f)
+			if err != nil {
+				return
+			}
+			return buildT[T](tmpT, exceptType)
+		case map[string][]string:
+			tmpT := make(map[string][]string)
+			tmpT, err = cast.ToStringMapStringSliceE(f)
+			if err != nil {
+				return
+			}
+			return buildT[T](tmpT, exceptType)
+		}
+	case reflect.Struct:
+		var tmpT T
+		switch reflect.TypeOf(f).Kind() {
+		case reflect.Map:
+			if err = mapstructure.Decode(f, &tmpT); err != nil {
+				return
+			}
+		case reflect.Struct, reflect.Pointer:
+			if err = copier.Copy(&tmpT, f); err != nil {
+				return
+			}
+		}
+		return tmpT, nil
 	}
 
 	err = unsupportedType
@@ -254,28 +316,5 @@ func toSliceE[T any](i interface{}) ([]T, error) {
 			return nil, err
 		}
 		return []T{convert}, nil
-	}
-}
-
-// toMapE casts an interface to any map type
-func toMapE[K comparable, V any](i interface{}) (map[K]V, error) {
-	var m = map[K]V{}
-
-	switch v := i.(type) {
-	case map[interface{}]interface{}:
-		for k, val := range v {
-			rk, err := Convert[K](k)
-			if err != nil {
-				return nil, err
-			}
-			rv, err := Convert[V](val)
-			if err != nil {
-				return nil, err
-			}
-			m[rk] = rv
-		}
-		return m, nil
-	default:
-		return m, fmt.Errorf("unable to cast %#v of type %T to map[string]interface{}", i, i)
 	}
 }
